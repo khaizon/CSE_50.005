@@ -144,7 +144,7 @@ void createchildren(){
 
     for (int i = 0; i < number_of_processes; i++) // looping to create number_of_processes children
     {
-        printf("%d outer \n",i);
+        // printf("%d outer \n",i);
         forkReturnValue = fork(); //pid of the child/parent 
 
         //error checking
@@ -160,11 +160,11 @@ void createchildren(){
             // so I need to:
             //          b. Store the pid_t of children i at children_processes[i]
             //          c. For child process, invoke the method job_dispatch(i)
-            printf("%d inner \n",i);
+            // printf("%d inner \n",i);
 
             pid_t temp = getpid();
             printf("pid %d",temp);
-            children_processes[i] = temp; //I hope this does "b"
+            
 
             job_dispatch(i); // I hope this does "c"
 
@@ -172,6 +172,9 @@ void createchildren(){
         }
         // if it doesn't break means it's still a parent process 
         // and the loop would continue so that's "d"? HAHA
+        else{
+            children_processes[i] = forkReturnValue; //I hope this does "b"
+        }
     }
 
     //executed by parent process, since the forkReturnValue will retain the pid of the last child created
