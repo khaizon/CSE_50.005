@@ -36,6 +36,8 @@ void job_dispatch(int i){
     //          d. Loop back to check for new job 
 
 
+
+
     printf("Hello from child %d with pid %d and parent id %d\n", i, getpid(), getppid());
     exit(0); 
 
@@ -133,10 +135,52 @@ void createchildren(){
     // TODO#2:  a. Create number_of_processes children processes
     //          b. Store the pid_t of children i at children_processes[i]
     //          c. For child process, invoke the method job_dispatch(i)
-    //          d. For the parent process, continue creating the next children
+    //          d. For the parent process, continue creating the next child
     //          e. After number_of_processes children are created, return to main 
 
-    return;
+    // To create  processes I need to fork but how sia
+
+    int forkReturnValue; // declaration of smth
+
+    for (int i = 0; i < number_of_processes; i++) // looping to create number_of_processes children
+    {
+        printf("%d outer \n",i);
+        forkReturnValue = fork(); //pid of the child/parent 
+
+        //error checking
+        if (forkReturnValue < 0)
+        {
+            perror("Failed to fork. \n");
+            exit(1);
+        }
+
+        //child process will have forReturnValue of 0
+        if (forkReturnValue == 0)
+        {
+            // so I need to:
+            //          b. Store the pid_t of children i at children_processes[i]
+            //          c. For child process, invoke the method job_dispatch(i)
+            printf("%d inner \n",i);
+
+            pid_t temp = getpid();
+            printf("pid %d",temp);
+            children_processes[i] = temp; //I hope this does "b"
+
+            job_dispatch(i); // I hope this does "c"
+
+            break; //dont create more children!
+        }
+        // if it doesn't break means it's still a parent process 
+        // and the loop would continue so that's "d"? HAHA
+    }
+
+    //executed by parent process, since the forkReturnValue will retain the pid of the last child created
+    if (forkReturnValue != 0){
+        while(wait(NULL) > 0); //wait for all children
+        printf("Children processes has all finished. Main process exiting\n");
+    }
+
+    return; // I believe this does "e" huat arh
 }
 
 /**
@@ -255,70 +299,16 @@ int main(int argc, char* argv[]){
     }
 
     printf("Number of processes: %d\n", number_of_processes);
+    printf("Main process pid %d \n", getpid());
 
-    setup();
+    createchildren();
     
-    //test fill the shared memory with something 
     for (int i = 0; i<number_of_processes; i++){
-        printf("Parent write job %d with duration %d, status %d \n", i, i*2, 0);
-        shmPTR_jobs_buffer[i].task_duration = i*2;
-        shmPTR_jobs_buffer[i].task_status = 0; //from parent
-    }
-
-    pid_t pid_test = fork();
-
-    if (pid_test == 0){
-        //child print
-        for (int i = 0; i<number_of_processes; i++){
-            printf("Child receives job duration from parent: %d, status %d \n", shmPTR_jobs_buffer[i].task_duration, shmPTR_jobs_buffer[i].task_status);
-            //rewrite for parent
-            shmPTR_jobs_buffer[i].task_duration = -1;
-            shmPTR_jobs_buffer[i].task_status = -1; //from child
-            sem_post(sem_jobs_buffer[i]);
-        }
-        exit(0);
-    }
-    else{
-        for (int i = 0; i<number_of_processes; i++){
-            sem_wait(sem_jobs_buffer[i]);
-            printf("Job %i  cleared by children. Duration: %d, status %d \n", i, shmPTR_jobs_buffer[i].task_duration, shmPTR_jobs_buffer[i].task_status);
-
-        }
+        printf("Child process %d created with pid: %d \n", i, children_processes[i]);
         wait(NULL);
     }
 
-    //detach and remove shared memory locations
-    int detach_status = shmdt((void *) ShmPTR_global_data); //detach
-    if (detach_status == -1) printf("Detach shared memory global_data ERROR\n");
-    int remove_status = shmctl(ShmID_global_data, IPC_RMID, NULL); //delete
-    if (remove_status == -1) printf("Remove shared memory global_data ERROR\n");
-    detach_status = shmdt((void *) shmPTR_jobs_buffer); //detach
-    if (detach_status == -1) printf("Detach shared memory jobs ERROR\n");
-    remove_status = shmctl(ShmID_jobs, IPC_RMID, NULL); //delete
-    if (remove_status == -1) printf("Remove shared memory jobs ERROR\n");
 
-
-    //unlink all semaphores before exiting process
-    int sem_close_status = sem_unlink("semglobaldata");
-    if (sem_close_status == 0){
-        printf("Semaphore globaldata closes succesfully.\n");
-    }
-    else{
-        printf("Semaphore globaldata fails to close.\n");
-    }
-
-    for (int i = 0; i<number_of_processes; i++){
-        char *sem_name = malloc(sizeof(char)*16);
-        sprintf(sem_name, "semjobs%d", i);
-        sem_close_status = sem_unlink(sem_name);
-        if (sem_close_status == 0){
-             printf("Semaphore jobs %d closes succesfully.\n", i);
-        }
-        else{
-            printf("Semaphore jobs %d fails to close.\n", i);
-        }
-        free(sem_name);
-    }
     printf("success\n");
     return 0;
 }
