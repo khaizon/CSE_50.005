@@ -157,22 +157,17 @@ void createchildren(){
         //child process will have forReturnValue of 0
         if (forkReturnValue == 0)
         {
-            // so I need to:
-            //          b. Store the pid_t of children i at children_processes[i]
-            //          c. For child process, invoke the method job_dispatch(i)
-            // printf("%d inner \n",i);
-
-            pid_t temp = getpid();
-            printf("pid %d",temp);
-            
-
+            // c. For child process, invoke the method job_dispatch(i)
             job_dispatch(i); // I hope this does "c"
 
             break; //dont create more children!
         }
+
         // if it doesn't break means it's still a parent process 
-        // and the loop would continue so that's "d"? HAHA
+        // And the forkreturnVAlue is also the child pid. so I jsut gonna add the child pid into the children process as they wish.
+
         else{
+            // b. Store the pid_t of children i at children_processes[i]
             children_processes[i] = forkReturnValue; //I hope this does "b"
         }
     }
@@ -183,7 +178,7 @@ void createchildren(){
         printf("Children processes has all finished. Main process exiting\n");
     }
 
-    return; // I believe this does "e" huat arh
+    return; // I believe this does "e" huat arh!
 }
 
 /**
