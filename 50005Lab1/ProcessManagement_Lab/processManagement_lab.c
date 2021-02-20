@@ -218,6 +218,18 @@ void main_loop(char* fileName){
 
         //TODO#4: create job, busy wait
         //      a. Busy wait and examine each shmPTR_jobs_buffer[i] for jobs that are done by checking that shmPTR_jobs_buffer[i].task_status == 0. You also need to ensure that the process i IS alive using waitpid(children_processes[i], NULL, WNOHANG). This WNOHANG option will not cause main process to block when the child is still alive. waitpid will return 0 if the child is still alive. 
+        bool busy_wait = true; //what
+        while (busy_wait){
+            int counter = 0;
+            int alive = waitpid(children_processes[counter], NULL, WNOHANG);
+            while (alive && shmPTR_jobs_buffer[counter].task_status > 0){
+                // busy wait
+                counter = (counter + 1) % number_of_processes;
+            };
+
+        }
+
+
         //      b. If both conditions in (a) is satisfied update the contents of shmPTR_jobs_buffer[i], and increase the semaphore using sem_post(sem_jobs_buffer[i])
         //      c. Break of busy wait loop, advance to the next task on file 
         //      d. Otherwise if process i is prematurely terminated, revive it. You are free to design any mechanism you want. The easiest way is to always spawn a new process using fork(), direct the children to job_dispatch(i) function. Then, update the shmPTR_jobs_buffer[i] for this process. Afterwards, don't forget to do sem_post as well 
