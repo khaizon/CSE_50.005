@@ -40,7 +40,8 @@ void job_dispatch(int i){
 
     while (1){
         int returnSemVal = sem_wait(sem_jobs_buffer[i]);
-
+        // printf("child number %d is still alive \n",i);
+        sleep(0.5);
         if (returnSemVal < 0){perror("got error in semaphore wait");} //error checking
 
         if (shmPTR_jobs_buffer[i].task_status){ //task status == 1 means incomplete so need to execute
@@ -48,7 +49,8 @@ void job_dispatch(int i){
             // pick your poison
             if (shmPTR_jobs_buffer[i].task_type == 'z'){
                 shmPTR_jobs_buffer[i].task_status = 0; // need to update task status before exiting
-                sem_post(sem_jobs_buffer[i]); // need to release buffer before exiting
+                // sem_post(sem_jobs_buffer[i]); // need to release buffer before exiting
+                printf("child %d terminating now \n",i);
                 exit(3);
             }
             if (shmPTR_jobs_buffer[i].task_type == 'i'){
@@ -226,7 +228,7 @@ void main_loop(char* fileName){
         //      d. Otherwise if process i is prematurely terminated, revive it. You are free to design any mechanism you want. The easiest way is to always spawn a new process using fork(), direct the children to job_dispatch(i) function. Then, update the shmPTR_jobs_buffer[i] for this process. Afterwards, don't forget to do sem_post as well 
 
         //      e. The outermost while loop will keep doing this until there's no more content in the input file. 
-
+        
         int alive = waitpid(children_processes[counter], NULL, WNOHANG);
         while (!alive && shmPTR_jobs_buffer[counter].task_status > 0){// will only break out of loop if not alive or job complete
             // busy wait
@@ -244,7 +246,7 @@ void main_loop(char* fileName){
                 exit(1);
             }
             if (forkReturnValue == 0){//child process will have forReturnValue of 0
-                printf("revived child");
+                printf("revived child\n");
                 job_dispatch(counter); // ask the child to do his/her job
                 break; //dont create more children!
             }
@@ -252,6 +254,7 @@ void main_loop(char* fileName){
             // And the forkreturnVAlue is also the child pid. 
             // so I jsut gonna add the child pid into the children process as they wish.
             else{
+                
                 children_processes[counter] = forkReturnValue; //Store the pid_t of children i at children_processes[counter]
                 shmPTR_jobs_buffer[counter].task_type = action;
                 shmPTR_jobs_buffer[counter].task_duration =  num;
@@ -262,6 +265,9 @@ void main_loop(char* fileName){
 
      //   sem_wait(sem_jobs_buffer[counter]); // indicate that I want to enter the critical region
         if (alive == 0){
+            int mysemvalue;xus
+            sem_getvalue(sem_jobs_buffer[counter],&mysemvalue);
+            printf("this is the current semaphore value of child %d ---- %d\n",counter,mysemvalue);
             shmPTR_jobs_buffer[counter].task_type = action;
             shmPTR_jobs_buffer[counter].task_duration =  num;
             shmPTR_jobs_buffer[counter].task_status =  1;
@@ -299,6 +305,7 @@ void main_loop(char* fileName){
     pid_t wpid;
     while ((wpid = wait(NULL)) > 0){
         process_waited_final ++;
+        printf("oricess_waited_final = %d \n", process_waited_final);
     }
     printf("sum should be -- %d \n",total);
     // print final results
