@@ -17,6 +17,7 @@
 #define TIME_MULTIPLIER 100 // used to multiply the amount of time needed to execute a task/wait in usleep
 #define MAX_PROCESS 10 // limit the number of maximum process
 
+
 /**
  * Data struct containing global_data
  * */
