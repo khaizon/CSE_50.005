@@ -33,52 +33,42 @@ void task(long duration)
  * */
 void job_dispatch(int i){
 
-    //   a. Always check the corresponding shmPTR_jobs_buffer[i] for new  jobs from the main process
+    // TODO#3:  a. Always check the corresponding shmPTR_jobs_buffer[i] for new  jobs from the main process
     //          b. Use semaphore so that you don't busy wait
     //          c. If there's new job, execute the job accordingly: either by calling task(), usleep, exit(3) or kill(getpid(), SIGKILL)
-    //          d. Loop back to check for new job 
+    //          d. Loop back to check for new job
+    // d. Loop back to check for new job 
+    while (true)
+    {   
+        // a. Always check the corresponding shmPTR_jobs_buffer[i] for new  jobs from the main process
+        // b. Use semaphore so that you don't busy wait
+        int semReturn = sem_wait(sem_jobs_buffer[i]);
+        if (semReturn<0){
+            perror("something wrong with semwait");
+        }
 
-    while (1){
-        int returnSemVal = sem_wait(sem_jobs_buffer[i]);
-        // printf("child number %d is still alive \n",i);
-        sleep(0.5);
-        if (returnSemVal < 0){perror("got error in semaphore wait");} //error checking
-
-        if (shmPTR_jobs_buffer[i].task_status){ //task status == 1 means incomplete so need to execute
-
-            // pick your poison
-            if (shmPTR_jobs_buffer[i].task_type == 'z'){
-                shmPTR_jobs_buffer[i].task_status = 0; // need to update task status before exiting
-                // sem_post(sem_jobs_buffer[i]); // need to release buffer before exiting
-                printf("child %d terminating now \n",i);
+        // c. If there's new job, execute the job accordingly: either by calling task(), usleep, exit(3) or kill(getpid(), SIGKILL)
+        // jobs that are not termination jobs
+        if (shmPTR_jobs_buffer[i].task_status != -1) {
+            if (shmPTR_jobs_buffer[i].task_type == 't') {
+                task(shmPTR_jobs_buffer[i].task_duration);
+                shmPTR_jobs_buffer[i].task_status = 0; 
+            }
+            else if (shmPTR_jobs_buffer[i].task_type == 'w') {
+                usleep(shmPTR_jobs_buffer[i].task_duration * TIME_MULTIPLIER);
+                shmPTR_jobs_buffer[i].task_status = 0;
+            }
+            else if (shmPTR_jobs_buffer[i].task_type == 'z') {
+                shmPTR_jobs_buffer[i].task_status = 0;
                 exit(3);
             }
-            if (shmPTR_jobs_buffer[i].task_type == 'i'){
+            else if (shmPTR_jobs_buffer[i].task_type == 'i') {
                 shmPTR_jobs_buffer[i].task_status = 0;
-                printf("child pid %d receives illegal op and now it's value is = %d \n",getpid(),shmPTR_jobs_buffer[i].task_status);
-                sem_post(sem_jobs_buffer[i]); //this probably cannot happen in real life because the program crashes upon illegal
                 kill(getpid(), SIGKILL);
             }
-
-            if (shmPTR_jobs_buffer[i].task_type == 't'){
-                task(shmPTR_jobs_buffer[i].task_duration);
-            }
-            if (shmPTR_jobs_buffer[i].task_type == 'w'){
-                usleep(shmPTR_jobs_buffer[i].task_duration * TIME_MULTIPLIER);
-            }
-            // update task status upon completion of execution
-            shmPTR_jobs_buffer[i].task_status = 0;
         }
-        //release semaphore
-        sem_post(sem_jobs_buffer[i]);
     }
-
- 
-    printf("Hello from child %d with pid %d and parent id %d\n", i, getpid(), getppid());
-    exit(0); 
-
 }
-
 /** 
  * Setup function to create shared mems and semaphores
  * **/
@@ -87,14 +77,11 @@ void setup(){
     // TODO#1:  a. Create shared memory for global_data struct (see processManagement_lab.h)
     //          b. When shared memory is successfully created, set the initial values of "max" and "min" of the global_data struct in the shared memory accordingly
     // To bring you up to speed, (a) and (b) are given to you already. Please study how it works. 
-
     //          c. Create semaphore of value 1 which purpose is to protect this global_data struct in shared memory 
     //          d. Create shared memory for number_of_processes job struct (see processManagement_lab.h)
     //          e. When shared memory is successfully created, setup the content of the structs (see handout)
     //          f. Create number_of_processes semaphores of value 0 each to protect each job struct in the shared memory. Store the returned pointer by sem_open in sem_jobs_buffer[i]
     //          g. Return to main
-
-
 
     ShmID_global_data = shmget(IPC_PRIVATE, sizeof(global_data), IPC_CREAT | 0666);
     if (ShmID_global_data == -1){
@@ -106,12 +93,11 @@ void setup(){
         printf("Attachment of global data shared memory failed \n");
         exit(EXIT_FAILURE);
     }
-
     //set global data min and max
     ShmPTR_global_data->max = -1;
     ShmPTR_global_data->min = INT_MAX;
-    
     sem_global_data = sem_open("semglobaldata",O_CREAT | O_EXCL, 0644, 1);
+
     while (true){
         if (sem_global_data == SEM_FAILED){
             //try to unlink, chance are it failed because there's already a semaphore of such name (maybe from your previously executed program, etc)
@@ -145,7 +131,6 @@ void setup(){
             if (sem_jobs_buffer[j] == SEM_FAILED){
                 //try to unlink, chance are it failed because there's already a semaphore of such name (maybe from your previously executed program, etc)
                 sem_unlink(jobSemaphore);
-
                 //try again
                 sem_jobs_buffer[j] = sem_open(jobSemaphore,O_CREAT | O_EXCL, 0644, 0);
             }
@@ -154,10 +139,7 @@ void setup(){
             }
         }
     }
-
-
     return;
-
 }
 
 /**
@@ -174,33 +156,22 @@ void createchildren(){
     int forkReturnValue; // declaration of smth
     for (int i = 0; i < number_of_processes; i++) // looping to create number_of_processes children
     {
-        // printf("%d outer \n",i);
-        forkReturnValue = fork(); //pid of the child/parent 
-        //error checking
-        if (forkReturnValue < 0)
-        {
+        forkReturnValue = fork(); //pid of the child/parent
+        if (forkReturnValue < 0){
             perror("Failed to fork. \n");
             exit(1);
         }
         //child process will have forReturnValue of 0
-        if (forkReturnValue == 0)
-        {
+        if (forkReturnValue == 0){
             // c. For child process, invoke the method job_dispatch(i)
-            printf(
-                "created child %d \n",i
-            );
             job_dispatch(i); // I hope this does "c"
             break; //dont create more children!
         }
-        // if it doesn't break means it's still a parent process 
-        // And the forkreturnVAlue is also the child pid. 
-        // so I jsut gonna add the child pid into the children process as they wish.
         else{
             // b. Store the pid_t of children i at children_processes[i]
             children_processes[i] = forkReturnValue; //I hope this does "b"
         }
     }
-
     return; // I believe this does "e" huat arh!
 }
 
@@ -208,14 +179,10 @@ void createchildren(){
  * The function where the main process loops and busy wait to dispatch job in available slots
  * */
 void main_loop(char* fileName){
-
     // load jobs and add them to the shared memory
     FILE* opened_file = fopen(fileName, "r");
     char action; //stores whether its a 'p' or 'w'
     long num; //stores the argument of the job 
-
-    int counter = 0;
-    int total = 0;
     while (fscanf(opened_file, "%c %ld\n", &action, &num) == 2) { //while the file still has input
 
         //TODO#4: create job, busy wait
@@ -229,85 +196,59 @@ void main_loop(char* fileName){
 
         //      e. The outermost while loop will keep doing this until there's no more content in the input file. 
         
-        int alive = waitpid(children_processes[counter], NULL, WNOHANG);
-        while (!alive && shmPTR_jobs_buffer[counter].task_status > 0){// will only break out of loop if not alive or job complete
-            // busy wait
-            counter = (counter + 1) % number_of_processes;
-            alive = waitpid(children_processes[counter], NULL, WNOHANG);
-        };
-        printf("broke out of busy waiting at counter == %d \n",counter);
-        // I think if it breaks out of this loop then I need to add in a new job
+       int task_not_dispatched = 1;
 
-        // But first, I should check if the worker is still alive
-        if (0 != alive){ //if not alive, I try to revive
-            int forkReturnValue = fork(); //pid of the child/parent 
-            if (forkReturnValue < 0){//error checking
-                perror("Failed to fork. \n");
-                exit(1);
-            }
-            if (forkReturnValue == 0){//child process will have forReturnValue of 0
-                printf("revived child\n");
-                job_dispatch(counter); // ask the child to do his/her job
-                break; //dont create more children!
-            }
-            // if it doesn't break means it's still a parent process 
-            // And the forkreturnVAlue is also the child pid. 
-            // so I jsut gonna add the child pid into the children process as they wish.
-            else{
-                
-                children_processes[counter] = forkReturnValue; //Store the pid_t of children i at children_processes[counter]
-                shmPTR_jobs_buffer[counter].task_type = action;
-                shmPTR_jobs_buffer[counter].task_duration =  num;
-                shmPTR_jobs_buffer[counter].task_status =  1;
-                sem_post(sem_jobs_buffer[counter]);
-            }
-        } // now I should have a child that is alive
-
-     //   sem_wait(sem_jobs_buffer[counter]); // indicate that I want to enter the critical region
-        if (alive == 0){
-            int mysemvalue;xus
-            sem_getvalue(sem_jobs_buffer[counter],&mysemvalue);
-            printf("this is the current semaphore value of child %d ---- %d\n",counter,mysemvalue);
-            shmPTR_jobs_buffer[counter].task_type = action;
-            shmPTR_jobs_buffer[counter].task_duration =  num;
-            shmPTR_jobs_buffer[counter].task_status =  1;
-            sem_post(sem_jobs_buffer[counter]);
-        }
-
-
-        counter = (counter + 1) % number_of_processes; //move to next task
-        total++;
+        while (task_not_dispatched == 1) {
+            // create job, busy wait
+            // a. Busy wait and examine each shmPTR_jobs_buffer[i] for jobs that are done by checking that shmPTR_jobs_buffer[i].task_status == 0. You also need to ensure that the process i IS alive using waitpid(children_processes[i], NULL, WNOHANG). This WNOHANG option will not cause main process to block when the child is still alive. waitpid will return 0 if the child is still alive. 
+            for (int i =0; i < number_of_processes; i++) {
+                int isalive = waitpid(children_processes[i], NULL, WNOHANG);
+                // b. If both conditions in (a) is satisfied update the contents of shmPTR_jobs_buffer[i], and increase the semaphore using sem_post(sem_jobs_buffer[i])
+                if (shmPTR_jobs_buffer[i].task_status == 0 && !isalive) {
+                    shmPTR_jobs_buffer[i].task_duration = num;
+                    shmPTR_jobs_buffer[i].task_type = action;
+                    shmPTR_jobs_buffer[i].task_status = 1;
+                    task_not_dispatched = 0; 
+                    sem_post(sem_jobs_buffer[i]);
+                    break;
+                }
+                else if (isalive != 0) {
+                    // d. Otherwise if process i is prematurely terminated, revive it. You are free to design any mechanism you want. The easiest way is to always spawn a new process using fork(), direct the children to job_dispatch(i) function.
+                    pid_t childPID = fork();
+                    if (childPID < 0) {
+                        fprintf(stderr, "Failed to creat fork");
+                    } 
+                    else if (childPID > 0) {
+                        children_processes[i] = childPID;
+                    }
+                    else {
+                        job_dispatch(i);
+                    }
+                }
+            }       
+        }   
     }
     fclose(opened_file);
-
-    printf("Main process is going to send termination signals\n");
 
     // TODO#4: Design a way to send termination jobs to ALL worker that are currently alive 
 
     for (int child = 0; child < number_of_processes; child++){
         int alive = waitpid(children_processes[child], NULL, WNOHANG);
-        printf("checking child %d... and it's alive value is %d \n",child,alive);
-        printf("task status is %d \n",shmPTR_jobs_buffer[counter].task_status); //minus back the one because I add my counter at the end of every loop
-        while ((shmPTR_jobs_buffer[counter].task_status == 1))
+        while ((shmPTR_jobs_buffer[child].task_status == 1))
             ;
         if (alive == 0) { //if child is still alive
-            printf("termination of child %d \n", child);
-            sem_wait(sem_jobs_buffer[child]);
             shmPTR_jobs_buffer[child].task_status = 1;
             shmPTR_jobs_buffer[child].task_duration = 0;
             shmPTR_jobs_buffer[child].task_type = 'z';
             sem_post(sem_jobs_buffer[child]);
         }}
 
-
     //wait for all children processes to properly execute the 'z' termination jobs
     int process_waited_final = 0;
     pid_t wpid;
     while ((wpid = wait(NULL)) > 0){
         process_waited_final ++;
-        printf("oricess_waited_final = %d \n", process_waited_final);
     }
-    printf("sum should be -- %d \n",total);
     // print final results
     printf("Final results: sum -- %ld, odd -- %ld, min -- %ld, max -- %ld, total task -- %ld\n", ShmPTR_global_data->sum_work, ShmPTR_global_data->odd, ShmPTR_global_data->min, ShmPTR_global_data->max, ShmPTR_global_data->total_tasks);
 }
@@ -317,15 +258,34 @@ void cleanup(){
     // 1. Detach both shared memory (global_data and jobs)
     // 2. Delete both shared memory (global_data and jobs)
     // 3. Unlink all semaphores in sem_jobs_buffer
+    int detach_status = shmdt((void *) ShmPTR_global_data); //detach
+    if (detach_status == -1) printf("Detach shared memory global_data ERROR\n");
+    int remove_status = shmctl(ShmID_global_data, IPC_RMID, NULL); //delete
+    if (remove_status == -1) printf("Remove shared memory global_data ERROR\n");
+    detach_status = shmdt((void *) shmPTR_jobs_buffer); //detach
+    if (detach_status == -1) printf("Detach shared memory jobs ERROR\n");
+    remove_status = shmctl(ShmID_jobs, IPC_RMID, NULL); //delete
+    if (remove_status == -1) printf("Remove shared memory jobs ERROR\n");
+
+    //unlink all semaphores before exiting process
+    int sem_close_status = sem_unlink("semglobaldata");
+    if (sem_close_status != 0){
+        printf("Semaphore globaldata fails to close.\n");
+    }
+
+    for (int i = 0; i<number_of_processes; i++){
+        char *sem_name = malloc(sizeof(char)*16);
+        sprintf(sem_name, "semjobs%d", i);
+        sem_close_status = sem_unlink(sem_name);
+        if (sem_close_status != 0){
+            printf("Semaphore jobs %d fails to close.\n", i);
+        }
+        free(sem_name);
+    }
 }
-
-
 
 // Real main
 int main(int argc, char* argv[]){
-
-    printf("Lab 1 Starts...\n");
-
     struct timeval start, end;
     long secs_used,micros_used;
 
